@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[headers]]
+  for = "/remoteEntry.js"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    # Never aggressively cache the manifest, or the host keeps seeing a stale remote.
+    Cache-Control = "public, max-age=0, must-revalidate"
