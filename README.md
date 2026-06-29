@@ -1,22 +1,42 @@
 # micro-fe-pet
 
-Two independent apps wired together with **Webpack 5 Module Federation**. The host loads a
-component from the remote **at runtime** — not at build time.
+Two independently deployed apps wired together with **Webpack 5 Module Federation**. The host
+loads a component from the remote **at runtime**, so the remote can ship a new version with no
+host rebuild.
 
-- **`remote/`** — exposes a `Button` component. Runs on `:3001`, also runs standalone.
-- **`host/`** — shell that renders the remote's `Button`. Runs on `:3000`.
+**Live demo:**
+- Host (shell): https://micro-fe-host.netlify.app
+- Remote (standalone): https://micro-fe-remote.netlify.app
 
-The point of micro frontends: teams ship independently. A new `remote` release needs no
-`host` rebuild.
+The apps model two teams sharing one page:
+- **`host/`** — the shop shell, owned by the *Platform team*. Runs on `:3000`.
+- **`remote/`** — a promo `Widget`, owned by the *Growth team*. Runs on `:3001`, also standalone.
 
 ```
-host (:3000)                         remote (:3001)
-  import('remote/Button')              exposes ./Button
-        │                                    │
-        └──── fetch remoteEntry.js ─────────▶│   (manifest)
-        ◀───── Button code over network ─────┘
-  renders <Button /> in place
+host (:3000)                          remote (:3001)
+  import('remote/Widget')               exposes ./Widget
+        │                                     │
+        └──── fetch remoteEntry.js ──────────▶│   (manifest)
+        ◀───── Widget code over network ──────┘
+  renders <Widget /> in place
 ```
+
+## The pain it solves
+
+In a monolith, shipping a one-line change to the promo means rebuilding and redeploying the
+**whole** app — the Growth team waits in the Platform team's release train.
+
+With Module Federation the promo is a separate app. Each side shows its own version and build
+time, so you can watch them deploy independently:
+
+1. Open the host — the promo is fetched from the remote's domain at runtime.
+2. Edit `remote/src/Widget.tsx` (change the copy, bump `version` in `remote/package.json`).
+3. `git push` → only the **remote** Netlify site rebuilds.
+4. Reload the host (never redeployed) → new promo + new *remote* build time, while the *host*
+   build time is unchanged.
+
+That is the whole point: the Growth team shipped to the shell without the Platform team
+deploying or being involved.
 
 ## Run locally
 
@@ -27,7 +47,7 @@ cd remote && npm install && npm start   # http://localhost:3001
 cd host   && npm install && npm start   # http://localhost:3000
 ```
 
-Open http://localhost:3000 — the button is fetched from the remote at runtime (see the
+Open http://localhost:3000 — the widget is fetched from the remote at runtime (see the
 `remoteEntry.js` request to `:3001` in DevTools → Network).
 
 ## How it works
@@ -38,7 +58,7 @@ Open http://localhost:3000 — the button is fetched from the remote at runtime 
 new ModuleFederationPlugin({
   name: 'remote',
   filename: 'remoteEntry.js',               // manifest the host fetches
-  exposes: { './Button': './src/Button' },
+  exposes: { './Widget': './src/Widget' },
   shared: { react: { singleton: true }, 'react-dom': { singleton: true } },
 });
 ```
@@ -57,9 +77,9 @@ new ModuleFederationPlugin({
 **Host renders it lazily, with a fallback** (`host/src/App.tsx`):
 
 ```tsx
-const RemoteButton = lazy(() => import('remote/Button'));
-// <RemoteErrorBoundary fallback={<LocalFallbackButton/>}>
-//   <Suspense fallback={…}><RemoteButton /></Suspense>
+const RemoteWidget = lazy(() => import('remote/Widget'));
+// <RemoteErrorBoundary fallback={<Fallback/>}>
+//   <Suspense fallback={…}><RemoteWidget /></Suspense>
 // </RemoteErrorBoundary>
 ```
 
@@ -82,9 +102,7 @@ redeploy. `netlify.toml` is preconfigured in each app.
    `https://<remote>.netlify.app`. Verify `/remoteEntry.js` loads.
 2. **Host site** — base directory `host`, same build/publish. Set env var
    `REMOTE_URL = https://<remote>.netlify.app`.
-3. Open the host URL — the button is loaded cross-origin from the remote's production URL.
-4. Change `remote/src/Button.tsx`, push → only the remote site rebuilds; the host picks up
-   the new version on next load.
+3. Open the host URL — the widget is loaded cross-origin from the remote's production URL.
 
 ## Stack
 
